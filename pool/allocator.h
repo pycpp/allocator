@@ -5,16 +5,23 @@
 #pragma once
 
 #include <pycpp/config.h>
-#include <pycpp/alloctor/pool/singleton.h>
+#include <pycpp/allocator/pool/singleton.h>
 #include <pycpp/stl/memory.h>
 #include <pycpp/stl/new.h>
 #include <pycpp/stl/type_traits.h>
-// TODO: singleton_pool
 
 PYCPP_BEGIN_NAMESPACE
 
 // OBJECTS
 // -------
+
+// Empty class to use as a tag for the pool_allocator.
+struct pool_allocator_tag
+{};
+
+// Empty class to use as a tag for the fast_pool_allocator
+struct fast_pool_allocator_tag
+{};
 
 /**
  *  \brief Allocator based on an underlying pool.
@@ -25,79 +32,110 @@ PYCPP_BEGIN_NAMESPACE
  *  completed, but may mean that some memory checking programs
  *  will complain about leaks.
   */
-template <typename T, typename Allocator, typename Mutex>
+template <
+    typename T,
+    typename Allocator= allocator<T>,
+    bool ThreadSafe = true,
+    size_t NextSize = 32,
+    size_t MaxSize = 0,
+    typename Tag = pool_allocator_tag
+>
 class pool_allocator
 {
 public:
-    template <typename U>
-    struct rebind { using other = pool_allocator<U, Allocator, Mutex>; };
+    static constexpr bool thread_safe = ThreadSafe;
 
     using value_type = T;
     using pointer = T*;
-    using mutex_type = Mutex;
+    using tag_type = Tag;
+    using allocator_type = Allocator;
+    using traits_type = allocator_traits<Allocator>;
     using is_always_equal = true_type;
-    // TODO: let allocator_traits handle this...
+    using size_type = typename traits_type::size_type;
+    using singleton_type = singleton_pool<
+        Allocator,
+        Tag,
+        sizeof(T),
+        NextSize,
+        MaxSize,
+        ThreadSafe
+    >;
 
-//    pool_allocator()
-//    { /*! Results in default construction of the underlying singleton_pool IFF an
-//       instance of this allocator is constructed during global initialization (
-//         required to ensure construction of singleton_pool IFF an
-//         instance of this allocator is constructed during global
-//         initialization. See ticket #2359 for a complete explanation at
-//         http://svn.boost.org/trac/boost/ticket/2359) .
-//       */
-//      singleton_pool<pool_allocator_tag, sizeof(T), UserAllocator, Mutex,
-//                     NextSize, MaxSize>::is_from(0);
-//    }
-//
-//    // default copy constructor.
-//
-//    // default assignment operator.
-//
-//    // not explicit, mimicking std::allocator [20.4.1]
-//    template <typename U>
-//    pool_allocator(const pool_allocator<U, UserAllocator, Mutex, NextSize, MaxSize> &)
-//    { /*! Results in the default construction of the underlying singleton_pool, this
-//         is required to ensure construction of singleton_pool IFF an
-//         instance of this allocator is constructed during global
-//         initialization. See ticket #2359 for a complete explanation
-//         at http://svn.boost.org/trac/boost/ticket/2359 .
-//       */
-//      singleton_pool<pool_allocator_tag, sizeof(T), UserAllocator, Mutex,
-//                     NextSize, MaxSize>::is_from(0);
-//    }
+    template <typename U>
+    struct rebind { using other = pool_allocator<U, allocator_type, thread_safe, NextSize, MaxSize, tag_type>; };
 
-    // TODO: implement..
-    bool
-    operator==(const pool_allocator&)
-    const
+    // Constructors
+    constexpr
+    pool_allocator()
+    noexcept
+    {}
+
+    pool_allocator(const pool_allocator&) noexcept = default;
+    pool_allocator& operator=(const pool_allocator&) noexcept = default;
+    pool_allocator(pool_allocator&&) noexcept = default;
+    pool_allocator& operator=(pool_allocator&&) noexcept = default;
+
+    template <typename U>
+    constexpr
+    pool_allocator(
+        const typename pool_allocator::template rebind<U>&
+    )
+    noexcept
+    {}
+
+    template <typename U>
+    pool_allocator&
+    operator=(
+        const typename pool_allocator::template rebind<U>&
+    )
+    noexcept
     {
-        return true;
+        return *this;
     }
 
+    // Allocation
     pointer
     allocate(
-        size_type n,
-        const void* hint = nullptr
+        size_type n
     )
     {
-//      const pointer ret = static_cast<pointer>(
-//          singleton_pool<pool_allocator_tag, sizeof(T), UserAllocator, Mutex,
-//              NextSize, MaxSize>::ordered_malloc(n) );
-//      if ((ret == 0) && n)
-//        boost::throw_exception(std::bad_alloc());
-//      return ret;
+        pointer p = static_cast<pointer>(singleton_type::ordered_allocate(n));
+        if (p == nullptr && n != 0) {
+            throw bad_alloc();
+        }
+        return p;
     }
 
     void
     deallocate(
-        pointer ptr,
+        pointer p,
         size_type n
     )
     {
-        // TODO: implement
-//        singleton_pool<pool_allocator_tag, sizeof(T), UserAllocator, Mutex,
-//          NextSize, MaxSize>::ordered_free(ptr, n);
+        singleton_type::ordered_deallocate(p, n);
+    }
+
+    // Relative operators
+    friend
+    bool
+    operator==(
+        const pool_allocator&,
+        const pool_allocator&
+    )
+    noexcept
+    {
+        return true;
+    }
+
+    friend
+    bool
+    operator!=(
+        const pool_allocator& x,
+        const pool_allocator& y
+    )
+    noexcept
+    {
+        return !(x == y);
     }
 };
 
@@ -113,65 +151,119 @@ public:
  *  completed, but may mean that some memory checking programs
  *  will complain about leaks.
   */
-template <typename T, typename Allocator, typename Mutex>
-class pool_allocator
+template <
+    typename T,
+    typename Allocator= allocator<T>,
+    bool ThreadSafe = true,
+    size_t NextSize = 32,
+    size_t MaxSize = 0,
+    typename Tag = fast_pool_allocator_tag
+>
+class fast_pool_allocator
 {
 public:
-    template <typename U>
-    struct rebind { using other = pool_allocator<U, Allocator, Mutex>; };
+    static constexpr bool thread_safe = ThreadSafe;
 
     using value_type = T;
     using pointer = T*;
-    using mutex_type = Mutex;
+    using tag_type = Tag;
+    using allocator_type = Allocator;
+    using traits_type = allocator_traits<Allocator>;
     using is_always_equal = true_type;
-    // TODO: let allocator_traits handle this...
+    using size_type = typename traits_type::size_type;
+    using singleton_type = singleton_pool<
+        Allocator,
+        Tag,
+        sizeof(T),
+        NextSize,
+        MaxSize,
+        ThreadSafe
+    >;
 
-//    fast_pool_allocator()
-//    {
-//      //! Ensures construction of the underlying singleton_pool IFF an
-//      //! instance of this allocator is constructed during global
-//      //! initialization. See ticket #2359 for a complete explanation
-//      //! at http://svn.boost.org/trac/boost/ticket/2359 .
-//      singleton_pool<fast_pool_allocator_tag, sizeof(T),
-//                     UserAllocator, Mutex, NextSize, MaxSize>::is_from(0);
-//    }
+    template <typename U>
+    struct rebind { using other = fast_pool_allocator<U, allocator_type, thread_safe, NextSize, MaxSize, tag_type>; };
 
-//    template <typename U>
-//    fast_pool_allocator(
-//        const fast_pool_allocator<U, UserAllocator, Mutex, NextSize, MaxSize> &)
-//    {
-//      //! Ensures construction of the underlying singleton_pool IFF an
-//      //! instance of this allocator is constructed during global
-//      //! initialization. See ticket #2359 for a complete explanation
-//      //! at http://svn.boost.org/trac/boost/ticket/2359 .
-//      singleton_pool<fast_pool_allocator_tag, sizeof(T),
-//                     UserAllocator, Mutex, NextSize, MaxSize>::is_from(0);
-//    }
+    // Constructors
+    constexpr
+    fast_pool_allocator()
+    noexcept
+    {}
 
-    // TODO: implement..
-    bool
-    operator==(const pool_allocator&)
-    const
+    fast_pool_allocator(const fast_pool_allocator&) noexcept = default;
+    fast_pool_allocator& operator=(const fast_pool_allocator&) noexcept = default;
+    fast_pool_allocator(fast_pool_allocator&&) noexcept = default;
+    fast_pool_allocator& operator=(fast_pool_allocator&&) noexcept = default;
+
+    template <typename U>
+    constexpr
+    fast_pool_allocator(
+        const typename fast_pool_allocator::template rebind<U>&
+    )
+    noexcept
+    {}
+
+    template <typename U>
+    fast_pool_allocator&
+    operator=(
+        const typename fast_pool_allocator::template rebind<U>&
+    )
+    noexcept
     {
-        return true;
+        return *this;
     }
 
+    // Allocation
     pointer
     allocate(
-        size_type n,
-        const void* hint = nullptr
+        size_type n
     )
     {
-        // TODO: implement...
+        pointer p;
+        if (n == 1) {
+            p = static_cast<pointer>(singleton_type::allocate(n));
+        } else {
+            p = static_cast<pointer>(singleton_type::ordered_allocate(n));
+        }
+        if (p == nullptr && n != 0) {
+            throw bad_alloc();
+        }
+        return p;
     }
 
     void
     deallocate(
-        pointer ptr,
+        pointer p,
         size_type n
     )
     {
-        // TODO: implement
+        if (n == 1) {
+            singleton_type::deallocate(p);
+        } else {
+            singleton_type::deallocate(p, n);
+        }
+    }
+
+    // Relative operators
+    friend
+    bool
+    operator==(
+        const fast_pool_allocator&,
+        const fast_pool_allocator&
+    )
+    noexcept
+    {
+        return true;
+    }
+
+    friend
+    bool
+    operator!=(
+        const fast_pool_allocator& x,
+        const fast_pool_allocator& y
+    )
+    noexcept
+    {
+        return !(x == y);
     }
 };
 

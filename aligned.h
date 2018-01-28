@@ -28,7 +28,7 @@
  *          template <typename U> aligned_allocator& operator=(const aligned_allocator<U>&) noexcept;
  *          ~aligned_allocator() = default;
  *
- *          value_type* allocate(size_t n, const void* hint = nullptr);
+ *          value_type* allocate(size_t n);
  *          pointer reallocate(pointer ptr, size_type old_size, size_type new_size, size_type count, size_type old_offset = 0, size_type new_offset = 0);
  *          void deallocate(value_type* p, size_t n);
  *      };
@@ -46,6 +46,7 @@
 
 #include <pycpp/stl/cstddef.h>
 #include <pycpp/stl/memory.h>
+#include <pycpp/stl/memory_resource.h>
 #include <pycpp/stl/new.h>
 #include <pycpp/stl/type_traits.h>
 #include <pycpp/stl/utility.h>
@@ -89,8 +90,7 @@ struct aligned_allocator
     // Allocation
     pointer
     allocate(
-        size_t n,
-        const void* = nullptr
+        size_t n
     )
     {
         void* p = aligned_alloc(alignof(value_type), n * sizeof(value_type));
@@ -169,11 +169,14 @@ private:
     }
 };
 
+namespace pmr
+{
 // ALIAS
 // -----
 
-// TODO: restore
-//using aligned_resource = resource_adaptor<aligned_allocator<byte>>;
+using aligned_resource = resource_adaptor<aligned_allocator<byte>>;
+
+}   /* pmr */
 
 // SPECIALIZATION
 // --------------

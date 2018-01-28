@@ -23,7 +23,7 @@
  *          template <typename U> crt_allocator& operator=(const crt_allocator<U>&) noexcept;
  *          ~crt_allocator() = default;
  *
- *          pointer allocate(size_t n, const void* hint = nullptr);
+ *          pointer allocate(size_t n;
  *          pointer reallocate(pointer ptr, size_type old_size, size_type new_size, size_type count, size_type old_offset = 0, size_type new_offset = 0);
  *          void deallocate(pointer p, size_t n);
  *      };
@@ -41,6 +41,7 @@
 
 #include <pycpp/stl/cstddef.h>
 #include <pycpp/stl/memory.h>
+#include <pycpp/stl/memory_resource.h>
 #include <pycpp/stl/new.h>
 #include <pycpp/stl/type_traits.h>
 #include <pycpp/stl/utility.h>
@@ -49,7 +50,6 @@ PYCPP_BEGIN_NAMESPACE
 
 // OBJECTS
 // -------
-
 
 /**
  *  \brief Standard C-runtime memory allocator.
@@ -84,8 +84,7 @@ struct crt_allocator
     // Allocation
     pointer
     allocate(
-        size_t n,
-        const void* = nullptr
+        size_t n
     )
     {
         void* p = malloc(n * sizeof(value_type));
@@ -162,11 +161,14 @@ private:
     }
 };
 
+namespace pmr
+{
 // ALIAS
 // -----
 
-// TODO: restore
-//using crt_resource = resource_adaptor<crt_allocator<byte>>;
+using crt_resource = resource_adaptor<crt_allocator<byte>>;
+
+}   /* pmr */
 
 // SPECIALIZATION
 // --------------

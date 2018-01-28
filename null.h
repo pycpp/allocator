@@ -20,7 +20,7 @@
  *          template <typename U> null_allocator& operator=(const null_allocator<U>&) noexcept;
  *          ~null_allocator() = default;
  *
- *          value_type* allocate(size_t n, const void* hint = nullptr);
+ *          value_type* allocate(size_t n);
  *          void deallocate(value_type* p, size_t n);
  *      };
  *
@@ -38,6 +38,7 @@
 #include <pycpp/stl/cassert.h>
 #include <pycpp/stl/cstddef.h>
 #include <pycpp/stl/memory.h>
+#include <pycpp/stl/memory_resource.h>
 #include <pycpp/stl/new.h>
 #include <pycpp/stl/type_traits.h>
 
@@ -79,8 +80,7 @@ struct null_allocator
     // Allocation
     pointer
     allocate(
-        size_t n,
-        const void* = nullptr
+        size_t n
     )
     {
         throw bad_alloc();
@@ -96,11 +96,14 @@ struct null_allocator
     }
 };
 
+namespace pmr
+{
 // ALIAS
 // -----
 
-// TODO: restore
-//using null_resource = resource_adaptor<null_allocator<byte>>;
+using null_resource = resource_adaptor<null_allocator<byte>>;
+
+}   /* pmr */
 
 // SPECIALIZATION
 // --------------
