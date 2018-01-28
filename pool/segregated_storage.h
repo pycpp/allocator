@@ -12,6 +12,7 @@
 
 #include <pycpp/config.h>
 #include <pycpp/stl/functional.h>
+#include <pycpp/stl/utility.h>
 
 PYCPP_BEGIN_NAMESPACE
 
@@ -56,6 +57,24 @@ public:
 
     segregated_storage(const segregated_storage &)= delete;
     segregated_storage& operator=(const segregated_storage &) = delete;
+
+    segregated_storage(
+        segregated_storage&& x
+    )
+    noexcept:
+        first_(x.first_)
+    {
+        x.first_ = nullptr;
+    }
+
+    segregated_storage& operator=(
+        segregated_storage&& x
+    )
+    noexcept
+    {
+        swap(x);
+        return *this;
+    }
 
     // Observers
     bool
@@ -181,7 +200,7 @@ public:
             if (nextof(start) == 0) {
                 return nullptr;
             }
-            iter = try_malloc_n(start, n, partition_size);
+            iter = try_allocate_n(start, n, partition_size);
         } while (iter == nullptr);
 
         void* ret = nextof(start);
@@ -211,6 +230,16 @@ public:
         if (n != 0) {
             add_ordered_block(chunks, n * partition_size, partition_size);
         }
+    }
+
+    // Modifiers
+    void
+    swap(
+        segregated_storage& x
+    )
+    noexcept
+    {
+        fast_swap(first_, x.first_);
     }
 
 protected:

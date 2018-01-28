@@ -161,7 +161,7 @@ private:
     // Only use from `get_pool()`.
     static
     storage_type&
-    pool()
+    pool_impl()
     noexcept
     {
         return reinterpret_cast<pool_type&>(get<0>(data_));
@@ -193,12 +193,12 @@ private:
         if (!initalized.load()) {
             lock_guard<mutex> lock(mu());
             if (!initalized.load()) {
-                new (&pool()) pool_type(NextSize, MaxSize);
+                new (&pool_impl()) pool_type(NextSize, MaxSize);
                 initalized.store(true, memory_order_release);
             }
         }
 
-        return pool();
+        return pool_impl();
     }
 
     static
@@ -210,10 +210,10 @@ private:
         static bool initalized = false;
         if (!initalized) {
             initalized = true;
-            new (&pool()) pool_type(NextSize, MaxSize);
+            new (&pool_impl()) pool_type(NextSize, MaxSize);
         }
 
-        return pool();
+        return pool_impl();
     }
 };
 

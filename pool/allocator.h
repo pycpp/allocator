@@ -54,20 +54,21 @@ public:
     using size_type = typename traits_type::size_type;
     using mutex_type = conditional_t<thread_safe, mutex, dummy_mutex>;
     using pool_type = pool<Allocator, sizeof(T)>;
-    using storage_type = shared_ptr<pool_type, thread_safe>;
+    using pair_type = compressed_pair<pool_type, mutex_type>;
+    using storage_type = shared_ptr<pair_type, thread_safe>;
 
     template <typename U>
     struct rebind { using other = pool_allocator<U, allocator_type, thread_safe, NextSize, MaxSize>; };
 
     // Constructors
     pool_allocator():
-        data_(PYCPP_NAMESPACE::make_shared<pool_type>(), NextSize, MaxSize)
+        data_(PYCPP_NAMESPACE::make_shared<pair_type>(pool_type(NextSize, MaxSize)))
     {}
 
     pool_allocator(
         const allocator_type& alloc
     ):
-        data_(PYCPP_NAMESPACE::allocate_shared<pool_type>(alloc), NextSize, MaxSize)
+        data_(PYCPP_NAMESPACE::allocate_shared<pair_type>(alloc, pool_type(NextSize, MaxSize)))
     {}
 
     pool_allocator(const pool_allocator&) noexcept = default;
@@ -75,37 +76,31 @@ public:
     pool_allocator(pool_allocator&&) noexcept = default;
     pool_allocator& operator=(pool_allocator&&) noexcept = default;
 
-    // TODO: finish
-// Creates a new pool
-// I think...
-// Yeppppp
-//    template <typename U>
-//    constexpr
-//    pool_allocator(
-//        const typename pool_allocator::template rebind<U>&
-//    )
-//    noexcept
-//    {}
-//
-//    template <typename U>
-//    pool_allocator&
-//    operator=(
-//        const typename pool_allocator::template rebind<U>&
-//    )
-//    noexcept
-//    {
-//        return *this;
-//    }
+    template <typename U>
+    pool_allocator(
+        const typename pool_allocator::template rebind<U>&
+    ):
+        pool_allocator()
+    {}
+
+    template <typename U>
+    pool_allocator&
+    operator=(
+        const typename pool_allocator::template rebind<U>&
+    )
+    noexcept
+    {
+        return *this;
+    }
 
     // Allocation
-    // TODO: need to lock and call mutex
     pointer
     allocate(
         size_type n
     )
     {
-        auto lock = lock_guard<mutex_type>(mu());
-        pointer p = static_cast<pointer>(pool().ordered_allocate(n));
+        lock_guard<mutex_type> lock(mu());
+        pointer p = static_cast<pointer>(pool_impl().ordered_allocate(n));
         if (p == nullptr && n != 0) {
             throw bad_alloc();
         }
@@ -118,8 +113,8 @@ public:
         size_type n
     )
     {
-        auto lock = lock_guard<mutex_type>(mu());
-        pool().ordered_deallocate(p, n);
+        lock_guard<mutex_type> lock(mu());
+        pool_impl().ordered_deallocate(p, n);
     }
 
     // Relative operators
@@ -146,20 +141,20 @@ public:
     }
 
 private:
-    compressed_pair<storage_type, mutex_type> data_;
+    storage_type data_;
 
     pool_type&
-    pool()
+    pool_impl()
     noexcept
     {
-        return *get<0>(data_);
+        return get<0>(*data_);
     }
 
     mutex_type&
     mu()
     noexcept
     {
-        return get<1>(data_);
+        return get<1>(*data_);
     }
 };
 
@@ -195,20 +190,21 @@ public:
     using size_type = typename traits_type::size_type;
     using mutex_type = conditional_t<thread_safe, mutex, dummy_mutex>;
     using pool_type = pool<Allocator, sizeof(T)>;
-    using storage_type = shared_ptr<pool_type, thread_safe>;
+    using pair_type = compressed_pair<pool_type, mutex_type>;
+    using storage_type = shared_ptr<pair_type, thread_safe>;
 
     template <typename U>
     struct rebind { using other = fast_pool_allocator<U, allocator_type, thread_safe, NextSize, MaxSize>; };
 
     // Constructors
     fast_pool_allocator():
-        data_(PYCPP_NAMESPACE::make_shared<pool_type>(), NextSize, MaxSize)
+        data_(PYCPP_NAMESPACE::make_shared<pair_type>(pool_type(NextSize, MaxSize)))
     {}
 
     fast_pool_allocator(
         const allocator_type& alloc
     ):
-        data_(PYCPP_NAMESPACE::allocate_shared<pool_type>(alloc), NextSize, MaxSize)
+        data_(PYCPP_NAMESPACE::allocate_shared<pair_type>(alloc, pool_type(NextSize, MaxSize)))
     {}
 
     fast_pool_allocator(const fast_pool_allocator&) noexcept = default;
@@ -216,24 +212,22 @@ public:
     fast_pool_allocator(fast_pool_allocator&&) noexcept = default;
     fast_pool_allocator& operator=(fast_pool_allocator&&) noexcept = default;
 
-//  TODO: finish
-//    template <typename U>
-//    constexpr
-//    fast_pool_allocator(
-//        const typename fast_pool_allocator::template rebind<U>&
-//    )
-//    noexcept
-//    {}
-//
-//    template <typename U>
-//    fast_pool_allocator&
-//    operator=(
-//        const typename fast_pool_allocator::template rebind<U>&
-//    )
-//    noexcept
-//    {
-//        return *this;
-//    }
+    template <typename U>
+    fast_pool_allocator(
+        const typename fast_pool_allocator::template rebind<U>&
+    ):
+        fast_pool_allocator()
+    {}
+
+    template <typename U>
+    fast_pool_allocator&
+    operator=(
+        const typename fast_pool_allocator::template rebind<U>&
+    )
+    noexcept
+    {
+        return *this;
+    }
 
     // Allocation
     pointer
@@ -241,12 +235,12 @@ public:
         size_type n
     )
     {
-        auto lock = lock_guard<mutex_type>(mu());
+        lock_guard<mutex_type> lock(mu());
         pointer p;
         if (n == 1) {
-            p = static_cast<pointer>(pool().allocate(n));
+            p = static_cast<pointer>(pool_impl().allocate(n));
         } else {
-            p = static_cast<pointer>(pool().ordered_allocate(n));
+            p = static_cast<pointer>(pool_impl().ordered_allocate(n));
         }
         if (p == nullptr && n != 0) {
             throw bad_alloc();
@@ -260,11 +254,11 @@ public:
         size_type n
     )
     {
-        auto lock = lock_guard<mutex_type>(mu());
+        lock_guard<mutex_type> lock(mu());
         if (n == 1) {
-            pool().deallocate(p);
+            pool_impl().deallocate(p);
         } else {
-            pool().deallocate(p, n);
+            pool_impl().deallocate(p, n);
         }
     }
 
@@ -292,20 +286,20 @@ public:
     }
 
 private:
-    compressed_pair<storage_type, mutex_type> data_;
+    storage_type data_;
 
     pool_type&
-    pool()
+    pool_impl()
     noexcept
     {
-        return *get<0>(data_);
+        return *get<0>(*data_);
     }
 
     mutex_type&
     mu()
     noexcept
     {
-        return get<1>(data_);
+        return get<1>(*data_);
     }
 };
 

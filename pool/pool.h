@@ -29,6 +29,7 @@
 #include <pycpp/stl/memory.h>
 #include <pycpp/stl/numeric.h>
 #include <pycpp/stl/new.h>
+#include <pycpp/stl/utility.h>
 
 PYCPP_BEGIN_NAMESPACE
 
@@ -74,6 +75,30 @@ public:
         ptr_(nullptr),
         sz_(0)
     {}
+
+    pod_ptr(const pod_ptr&) = default;
+    pod_ptr& operator=(const pod_ptr&) = default;
+
+    pod_ptr(
+        pod_ptr&& x
+    )
+    noexcept:
+        ptr_(x.ptr_),
+        sz_(x.sz_)
+    {
+        x.ptr_ = nullptr;
+        x.sz_ = 0;
+    }
+
+    pod_ptr&
+    operator=(
+        pod_ptr&& x
+    )
+    noexcept
+    {
+        swap(x);
+        return *this;
+    }
 
     // Properties
     bool
@@ -156,6 +181,17 @@ public:
         next_size() = x.total_size();
     }
 
+    // Modifiers
+    void
+    swap(
+        pod_ptr& x
+    )
+    noexcept
+    {
+        fast_swap(ptr_, x.ptr_);
+        fast_swap(sz_, x.sz_);
+    }
+
 private:
     char* ptr_;
     size_type sz_;
@@ -174,6 +210,11 @@ private:
         return (ptr_next_size() - min_alloc_size);
     }
 };
+
+
+template <typename SizeType, typename VoidPtr>
+const SizeType
+pod_ptr<SizeType, VoidPtr>::min_alloc_size;
 
 /**
  *  \brief A fast memory allocator that with proper alignment.
@@ -258,6 +299,27 @@ public:
         start_size_(next_size),
         max_size_(max_size)
     {}
+
+    pool(const pool&) = delete;
+    pool& operator=(const pool&) = delete;
+
+    pool(
+        pool&& x
+    )
+    noexcept:
+        pool()
+    {
+        swap(x);
+    }
+
+    pool& operator=(
+        pool&& x
+    )
+    noexcept
+    {
+        swap(x);
+        return *this;
+    }
 
     ~pool()
     {
@@ -414,7 +476,7 @@ public:
                 }
 
                 // And release memory
-                traits_type::deallocate(*this, ptr.begin());
+                traits_type::deallocate(*this, ptr.begin(), 1);
                 ret = true;
             }
 
@@ -437,7 +499,10 @@ public:
 
         do {
             const list_type next = iter.next();
-            traits_type::deallocate(*this, iter.begin());
+            // TODO: shit....
+            // Does this need malloc/free?
+            // How do I store the actual SIZE???
+            traits_type::deallocate(*this, iter.begin(), 1);
             iter = next;
         } while (iter.valid());
 
@@ -446,6 +511,20 @@ public:
         next_size_ = start_size_;
 
         return true;
+    }
+
+    void
+    swap(
+        pool& x
+    )
+    noexcept
+    {
+        swap_allocator(static_cast<allocator_type&>(*this), static_cast<allocator_type&>(x));
+        storage_type::swap(static_cast<storage_type&>(x));
+        list_.swap(x.list_);
+        fast_swap(next_size_, x.next_size_);
+        fast_swap(start_size_, x.start_size_);
+        fast_swap(max_size_, x.max_size_);
     }
 
     // Allocation
@@ -747,5 +826,17 @@ private:
         return store().allocate();
     }
 };
+
+template <typename Allocator, size_t RequestedSize>
+const typename pool<Allocator, RequestedSize>::size_type
+pool<Allocator, RequestedSize>::requested_size;
+
+template <typename Allocator, size_t RequestedSize>
+const typename pool<Allocator, RequestedSize>::size_type
+pool<Allocator, RequestedSize>::min_alloc_size;
+
+template <typename Allocator, size_t RequestedSize>
+const typename pool<Allocator, RequestedSize>::size_type
+pool<Allocator, RequestedSize>::min_align;
 
 PYCPP_END_NAMESPACE
