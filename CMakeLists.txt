@@ -2,9 +2,10 @@
 #  :license: MIT, see licenses/mit.md for more details.
 
 add_headers(
-    aligned.h
-    crt.h
-    null.h
     pool/allocator.h
     pool/pool.h
+    aligned.h
+    crt.h
+    new_delete.h
+    null_memory.h
 )
