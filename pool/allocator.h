@@ -1,6 +1,6 @@
 //  :copyright: (c) 2000, 2001 Stephen Cleary.
 //  :copyright: (c) 2017-2018 Alex Huszagh.
-//  :license: MIT, see licenses/mit.md for more details.
+//  :license: Boost, see licenses/boost.md for more details.
 
 #pragma once
 
